@@ -13,8 +13,13 @@ var dev *as608.Device
 
 func init() {
 	var err error
-	dev, err = as608.Open("COM4", 57600)
-	if err != nil {
+	for i := 0; i < 20; i++ {
+		dev, err = as608.Open(fmt.Sprintf("COM%d", i), 57600)
+		if err == nil {
+			break
+		}
+	}
+	if dev == nil {
 		log.Fatal(err)
 	}
 }
