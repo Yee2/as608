@@ -186,7 +186,7 @@ func (d *Device) UpImage(filename string) error {
 func (d *Device) Search() (id, score int, e error) {
 	packet := NewPacket()
 	packet.Data = []byte{0x32, 0x03, 0xff, 0xff, 0x00, 0x00 << 1}
-	_, err := d.Write(packet.bytes())
+	_, err := d.Write(packet.Bytes())
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "write error")
 	}
@@ -334,7 +334,7 @@ func (d *Device) ValidTempleteNum() (int, error) {
 func (d *Device) GetSN() (string, error) {
 	packet := NewPacket()
 	packet.Data = []byte{0x34}
-	_, err := d.Write(packet.bytes())
+	_, err := d.Write(packet.Bytes())
 	if err != nil {
 		return "", errors.Wrap(err, "GetSN fail")
 	}

@@ -60,7 +60,7 @@ type Device struct {
 }
 
 func Open(name string, baud int) (*Device, error) {
-	s, err := serial.OpenPort(&serial.Config{Name: "COM4", Baud: 57600})
+	s, err := serial.OpenPort(&serial.Config{Name: name, Baud: baud})
 	if err != nil {
 		return nil, errors.Wrap(err, "Initialization of the device failed")
 	}
