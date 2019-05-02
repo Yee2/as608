@@ -96,6 +96,7 @@ const (
 	Command_ValidTempleteNum Command = 0x1d
 	Command_Empty            Command = 0x0d
 	Command_ReadIndexTable   Command = 0x1f
+	Command_Delete           Command = 0x0c
 )
 
 type Chunk int
@@ -214,6 +215,7 @@ func (d *Device) Search() (id, score int, e error) {
 	}
 }
 
+//清空指纹库
 func (d *Device) Empty() error {
 	e := d.Send(NewPacketWithCommand(Command_Empty))
 	if e != nil {
@@ -230,6 +232,8 @@ func (d *Device) Empty() error {
 		return errors.Errorf("read fail with code 0x%02x", p.Data[0])
 	}
 }
+
+// 读取所有已经存在的指纹索引
 func (d *Device) ReadIndexTable() ([]int, error) {
 	arrays := make([]int, 0)
 	for page := 0; page < 2; page++ {
@@ -344,4 +348,27 @@ func (d *Device) GetSN() (string, error) {
 		return "", errors.Wrap(err, "GetSN fail")
 	}
 	return fmt.Sprintf("%X", p.Data), nil
+}
+
+func (d *Device) Delete(id int) error {
+	packet := NewPacket()
+	packet.Data = []byte{byte(Command_Delete), byte(id >> 8), byte(id), 0x00, 0x01}
+	_, err := d.Write(packet.Bytes())
+	if err != nil {
+		return errors.Wrap(err, "GetSN fail")
+	}
+	p, err := d.Receive()
+	if err != nil {
+		return errors.Wrap(err, "GetSN fail")
+	}
+	if len(p.Data) == 0 {
+		return fmt.Errorf("错误返回!")
+	}
+	if p.Data[0] == 0x00 {
+		return nil
+	}
+	if p.Data[0] == 0x10 {
+		return fmt.Errorf("删除失败!")
+	}
+	return fmt.Errorf("未知错误码:%x", p.Data[0])
 }

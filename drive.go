@@ -141,6 +141,9 @@ func (d *Device) receive() (*Packet, error) {
 		}
 	}
 
+	if n < 2{
+		return nil, errors.New("accept packet error, packet length is 0")
+	}
 	sum := int(header[6]) + int(header[7]) + int(header[8])
 	for i := range data[:len(data)-2] {
 		sum += int(data[i])

@@ -7,17 +7,16 @@ import (
 	"github.com/urfave/cli"
 	"log"
 	"os"
+	"strconv"
 )
 
 var dev *as608.Device
 
 func init() {
 	var err error
-	for i := 0; i < 20; i++ {
-		dev, err = as608.Open(fmt.Sprintf("COM%d", i), 57600)
-		if err == nil {
-			break
-		}
+	dev, err = as608.Open(fmt.Sprintf("COM%d", 13), 57600)
+	if err == nil {
+		fmt.Printf("自动打开设备:COM%d\n",13)
 	}
 	if dev == nil {
 		log.Fatal(err)
@@ -50,6 +49,11 @@ func main() {
 			Name:   "search",
 			Usage:  "搜索注册过的指纹",
 			Action: Search,
+		},
+		{
+			Name:   "delete",
+			Usage:  "删除指纹",
+			Action: Delete,
 		},
 	}
 	err := app.Run(os.Args)
@@ -92,6 +96,23 @@ func Info(_ *cli.Context) error {
 	fmt.Printf("指纹库大小:%d\n", inf.DataBaseSize)
 	fmt.Printf("安全等级:%d\n", inf.SecurLevel)
 	fmt.Printf("设备地址:0x%02x\n", inf.DeviceAddress)
+	return nil
+}
+func Delete(ctx *cli.Context) error {
+	if ctx.NArg() == 0{
+		fmt.Println("请输入要删除指纹的ID")
+		return nil
+	}
+	id,err := strconv.Atoi(ctx.Args().First())
+	if err != nil{
+		fmt.Println("请输入正确的ID号码")
+		return nil
+	}
+	err = dev.Delete(id)
+	if err != nil{
+		return err
+	}
+	fmt.Println("删除完成")
 	return nil
 }
 func Index(_ *cli.Context) error {
