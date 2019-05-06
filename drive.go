@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tarm/serial"
 	"io"
+	"sync"
 )
 
 type PackType byte
@@ -57,6 +58,7 @@ func (p *Packet) Bytes() []byte {
 type Device struct {
 	io.ReadWriter
 	Chunk
+	rw *sync.RWMutex
 }
 
 func Open(name string, baud int) (*Device, error) {
@@ -64,9 +66,11 @@ func Open(name string, baud int) (*Device, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Initialization of the device failed")
 	}
-	return &Device{s, Chunk_64}, nil
+	return &Device{s, Chunk_64,&sync.RWMutex{}}, nil
 }
 func (d *Device) Send(packet *Packet) error {
+	d.rw.Lock()
+	defer d.rw.Unlock()
 	Chunk := int(d.Chunk)
 	if len(packet.Data) > Chunk && Chunk != 0 {
 		subPack := NewPacket()
@@ -89,6 +93,8 @@ func (d *Device) Send(packet *Packet) error {
 	return e
 }
 func (d *Device) Receive() (*Packet, error) {
+	d.rw.RLock()
+	defer d.rw.RUnlock()
 	p, err := d.receive()
 	if err != nil {
 		return p, err
