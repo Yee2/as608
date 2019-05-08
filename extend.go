@@ -350,6 +350,25 @@ func (d *Device) GetSN() (string, error) {
 	return fmt.Sprintf("%X", p.Data), nil
 }
 
+func (d *Device) Cancel() error {
+	packet := NewPacketWithCommand(Command_Cancel)
+	err := d.Send(packet)
+	if err != nil {
+		return errors.Wrap(err, "Cancel failure")
+	}
+	msg, err := d.Receive()
+	if err != nil {
+		return errors.Wrap(err, "Cancel failure")
+	}
+	if len(msg.Data) == 0 {
+		return fmt.Errorf("error response, packet length is 0")
+	}
+	if msg.Data[0] == 0x00{
+		return nil
+	}
+	return fmt.Errorf("an error occurred and the response was %X",msg.Data[0])
+}
+
 func (d *Device) Delete(id int) error {
 	packet := NewPacket()
 	packet.Data = []byte{byte(Command_Delete), byte(id >> 8), byte(id), 0x00, 0x01}
@@ -362,13 +381,13 @@ func (d *Device) Delete(id int) error {
 		return errors.Wrap(err, "GetSN fail")
 	}
 	if len(p.Data) == 0 {
-		return fmt.Errorf("错误返回!")
+		return fmt.Errorf("error response, packet length is 0")
 	}
 	if p.Data[0] == 0x00 {
 		return nil
 	}
 	if p.Data[0] == 0x10 {
-		return fmt.Errorf("删除失败!")
+		return fmt.Errorf("failed to delete")
 	}
-	return fmt.Errorf("未知错误码:%x", p.Data[0])
+	return fmt.Errorf("an error occurred and the response was %X",p.Data[0])
 }
