@@ -134,6 +134,8 @@ func (d *Device) GetImage() error {
 		}
 	}
 }
+
+// 从指纹模块读取一个指纹，并且保存到文件，格式为PNG
 func (d *Device) UpImage(filename string) error {
 	if err := d.GetImage(); err != nil {
 		return err
@@ -284,6 +286,7 @@ type Inf struct {
 	ParaTableFlag       uint16
 }
 
+// 获取模块信息
 func (d *Device) Information() (*Inf, error) {
 	err := d.Send(NewPacketWithCommand(0x16))
 	if err != nil {
@@ -335,6 +338,8 @@ func (d *Device) ValidTempleteNum() (int, error) {
 		return 0, errors.Errorf("read fail with code 0x%02x", p.Data[0])
 	}
 }
+
+// 获取指纹模块SN信息
 func (d *Device) GetSN() (string, error) {
 	packet := NewPacket()
 	packet.Data = []byte{0x34}
@@ -350,6 +355,7 @@ func (d *Device) GetSN() (string, error) {
 	return fmt.Sprintf("%X", p.Data), nil
 }
 
+// 取消当前正在进行的操作
 func (d *Device) Cancel() error {
 	packet := NewPacketWithCommand(Command_Cancel)
 	err := d.Send(packet)
@@ -369,6 +375,7 @@ func (d *Device) Cancel() error {
 	return fmt.Errorf("an error occurred and the response was %X",msg.Data[0])
 }
 
+// 删除一个指纹，参数是指纹的ID
 func (d *Device) Delete(id int) error {
 	packet := NewPacket()
 	packet.Data = []byte{byte(Command_Delete), byte(id >> 8), byte(id), 0x00, 0x01}

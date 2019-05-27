@@ -6,6 +6,7 @@ import (
 	"github.com/tarm/serial"
 	"io"
 	"sync"
+	"time"
 )
 
 type PackType byte
@@ -58,7 +59,12 @@ func (p *Packet) Bytes() []byte {
 type Device struct {
 	io.ReadWriter
 	Chunk
-	rw *sync.RWMutex
+	rw        *sync.RWMutex
+	listeners []chan struct {
+		p *Packet
+		e error
+	}
+	sleep chan struct{}
 }
 
 func Open(name string, baud int) (*Device, error) {
@@ -66,8 +72,87 @@ func Open(name string, baud int) (*Device, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Initialization of the device failed")
 	}
-	return &Device{s, Chunk_64,&sync.RWMutex{}}, nil
+	return &Device{ReadWriter: s, Chunk: Chunk_64, rw: &sync.RWMutex{}}, nil
 }
+
+// 接收一个数据包，超时返回错误
+func (d *Device) ReceiveTimeout(duration time.Duration) (*Packet, error) {
+	if d.listeners == nil {
+		d.daemon()
+	}
+	ch := make(chan struct {
+		p *Packet
+		e error
+	})
+	d.rw.RLock()
+	d.listeners = append(d.listeners, ch)
+	d.rw.Unlock()
+	d.wake()
+	select {
+	case <-time.Tick(duration):
+		return nil, errors.Errorf("timeout")
+	case s := <-ch:
+		return s.p, s.e
+	}
+}
+
+// 接收一个数据包
+func (d *Device) Receive() (*Packet, error) {
+	if d.listeners == nil {
+		d.daemon()
+	}
+	ch := make(chan struct {
+		p *Packet
+		e error
+	})
+	d.rw.RLock()
+	d.listeners = append(d.listeners, ch)
+	d.rw.Unlock()
+	d.wake()
+	s, ok := <-ch
+	if !ok {
+		return nil, errors.Errorf("chan closed")
+	}
+	return s.p, s.e
+}
+
+func (d *Device) wake() {
+	if d.sleep == nil {
+		return
+	}
+	timeout := time.Tick(20 * time.Millisecond)
+	select {
+	case <-timeout:
+	case d.sleep <- struct{}{}:
+	}
+}
+func (d *Device) daemon() {
+	d.listeners = make([]chan struct {
+		p *Packet
+		e error
+	}, 0)
+	sleep := make(chan struct{})
+	for {
+		p, err := d.receive()
+		if len(d.listeners) == 0 {
+			d.sleep = sleep
+			<-d.sleep
+			d.sleep = nil
+		}
+		for _, listener := range d.listeners {
+			listener <- struct {
+				p *Packet
+				e error
+			}{p: p, e: err}
+			close(listener)
+		}
+		d.rw.RLock()
+		d.listeners = d.listeners[:0]
+		d.rw.RUnlock()
+	}
+}
+
+// 发送指令给指纹模块
 func (d *Device) Send(packet *Packet) error {
 	d.rw.Lock()
 	defer d.rw.Unlock()
@@ -92,16 +177,14 @@ func (d *Device) Send(packet *Packet) error {
 	_, e := d.Write(packet.Bytes())
 	return e
 }
-func (d *Device) Receive() (*Packet, error) {
-	d.rw.RLock()
-	defer d.rw.RUnlock()
-	p, err := d.receive()
+func (d *Device) receive() (*Packet, error) {
+	p, err := d.fragment()
 	if err != nil {
 		return p, err
 	}
 	if p.Type == PackType_Data {
 		for {
-			p2, err := d.receive()
+			p2, err := d.fragment()
 			if err != nil {
 				return p, err
 			}
@@ -113,7 +196,7 @@ func (d *Device) Receive() (*Packet, error) {
 	}
 	return p, err
 }
-func (d *Device) receive() (*Packet, error) {
+func (d *Device) fragment() (*Packet, error) {
 	// 每个包最小长度 11 byte
 
 	// 读取头部信息
@@ -147,7 +230,7 @@ func (d *Device) receive() (*Packet, error) {
 		}
 	}
 
-	if n < 2{
+	if n < 2 {
 		return nil, errors.New("accept packet error, packet length is 0")
 	}
 	sum := int(header[6]) + int(header[7]) + int(header[8])
