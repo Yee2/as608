@@ -105,7 +105,7 @@ func (d *Device) Receive() (*Packet, error) {
 		p *Packet
 		e error
 	})
-	d.rw.RLock()
+	d.rw.Lock()
 	d.listeners = append(d.listeners, ch)
 	d.rw.Unlock()
 	d.wake()
