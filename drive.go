@@ -59,7 +59,7 @@ func (p *Packet) Bytes() []byte {
 type Device struct {
 	io.ReadWriter
 	Chunk
-	rw        *sync.RWMutex
+	rw        sync.Locker
 	listeners []chan struct {
 		p *Packet
 		e error
@@ -84,7 +84,7 @@ func (d *Device) ReceiveTimeout(duration time.Duration) (*Packet, error) {
 		p *Packet
 		e error
 	})
-	d.rw.RLock()
+	d.rw.Lock()
 	d.listeners = append(d.listeners, ch)
 	d.rw.Unlock()
 	d.wake()
@@ -132,24 +132,26 @@ func (d *Device) daemon() {
 		e error
 	}, 0)
 	sleep := make(chan struct{})
-	for {
-		p, err := d.receive()
-		if len(d.listeners) == 0 {
-			d.sleep = sleep
-			<-d.sleep
-			d.sleep = nil
+	go func() {
+		for {
+			p, err := d.receive()
+			if len(d.listeners) == 0 {
+				d.sleep = sleep
+				<-d.sleep
+				d.sleep = nil
+			}
+			for _, listener := range d.listeners {
+				listener <- struct {
+					p *Packet
+					e error
+				}{p: p, e: err}
+				close(listener)
+			}
+			d.rw.Lock()
+			d.listeners = d.listeners[:0]
+			d.rw.Unlock()
 		}
-		for _, listener := range d.listeners {
-			listener <- struct {
-				p *Packet
-				e error
-			}{p: p, e: err}
-			close(listener)
-		}
-		d.rw.RLock()
-		d.listeners = d.listeners[:0]
-		d.rw.RUnlock()
-	}
+	}()
 }
 
 // 发送指令给指纹模块
